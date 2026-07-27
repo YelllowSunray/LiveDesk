@@ -60,8 +60,17 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('visitor join failed:', error);
+    const message =
+      error instanceof Error ? error.message : 'Failed to join queue';
+    // Surface config mistakes (bad PEM, missing env) so the widget can show them.
+    const isConfigError =
+      /private key|PEM|credentials|FIREBASE_ADMIN|pattern/i.test(message);
     return NextResponse.json(
-      { error: 'Failed to join queue' },
+      {
+        error: isConfigError
+          ? 'Server Firebase Admin credentials are invalid. Check FIREBASE_ADMIN_PRIVATE_KEY on Vercel (use \\n newlines).'
+          : 'Failed to join queue',
+      },
       { status: 500 }
     );
   }

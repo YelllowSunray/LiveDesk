@@ -107,12 +107,29 @@ export default function WidgetPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slug }),
       });
-      const data = await res.json();
+      const raw = await res.text();
+      let data: {
+        error?: string;
+        customToken?: string;
+        session?: CallSession;
+      } = {};
+      try {
+        data = JSON.parse(raw) as typeof data;
+      } catch {
+        throw new Error(
+          res.ok
+            ? 'Invalid server response'
+            : 'Server error joining queue. Check Firebase Admin env vars on Vercel.'
+        );
+      }
       if (!res.ok) {
         throw new Error(data.error || 'Could not join queue');
       }
-      await signInWidgetWithCustomToken(data.customToken as string);
-      setSession(data.session as CallSession);
+      if (!data.customToken || !data.session) {
+        throw new Error('Invalid join response from server');
+      }
+      await signInWidgetWithCustomToken(data.customToken);
+      setSession(data.session);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not join queue');
     } finally {
