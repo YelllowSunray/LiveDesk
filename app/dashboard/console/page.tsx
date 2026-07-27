@@ -1,21 +1,25 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Headphones, UserRound } from 'lucide-react';
+import { Headphones, UserRound, Video } from 'lucide-react';
 import { VideoCall } from '@/components/VideoCall';
+import { LiveFeedPublisher } from '@/components/LiveFeedPublisher';
 import { useAuth } from '@/lib/firebase/auth-context';
 import {
   acceptSession,
   endSession,
+  setLiveFeedActive,
   setMemberOnline,
+  subscribeCompany,
   subscribeMember,
   subscribeWaitingSessions,
 } from '@/lib/companies';
 import type { CallSession } from '@/lib/types';
 
 export default function ConsolePage() {
-  const { user, company, profile } = useAuth();
+  const { user, company, profile, refreshCompany } = useAuth();
   const [online, setOnline] = useState(false);
+  const [liveFeed, setLiveFeed] = useState(false);
   const [queue, setQueue] = useState<CallSession[]>([]);
   const [active, setActive] = useState<CallSession | null>(null);
   const [error, setError] = useState('');
@@ -27,6 +31,14 @@ export default function ConsolePage() {
       if (member) setOnline(member.online);
     });
   }, [company, user]);
+
+  useEffect(() => {
+    if (!company) return;
+    setLiveFeed(Boolean(company.liveFeedActive));
+    return subscribeCompany(company.id, (next) => {
+      if (next) setLiveFeed(Boolean(next.liveFeedActive));
+    });
+  }, [company]);
 
   useEffect(() => {
     if (!company) return;
@@ -42,6 +54,7 @@ export default function ConsolePage() {
 
     const goOffline = () => {
       void setMemberOnline(company.id, user.uid, false);
+      void setLiveFeedActive(company.id, false);
     };
 
     window.addEventListener('pagehide', goOffline);
@@ -59,8 +72,32 @@ export default function ConsolePage() {
       const next = !online;
       await setMemberOnline(company.id, user.uid, next);
       setOnline(next);
+      if (!next) {
+        await setLiveFeedActive(company.id, false);
+        setLiveFeed(false);
+        await refreshCompany();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update status');
+    }
+  }
+
+  async function toggleLiveFeed() {
+    if (!company || !user) return;
+    setError('');
+    try {
+      const next = !liveFeed;
+      if (next && !online) {
+        await setMemberOnline(company.id, user.uid, true);
+        setOnline(true);
+      }
+      await setLiveFeedActive(company.id, next);
+      setLiveFeed(next);
+      await refreshCompany();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to update live feed'
+      );
     }
   }
 
@@ -69,6 +106,11 @@ export default function ConsolePage() {
     setAcceptingId(session.id);
     setError('');
     try {
+      // Pause lobby preview while on a 1:1 call (camera is needed for the call).
+      if (liveFeed) {
+        await setLiveFeedActive(company.id, false);
+        setLiveFeed(false);
+      }
       await acceptSession(company.id, session.id, user.uid);
       setActive({
         ...session,
@@ -100,26 +142,69 @@ export default function ConsolePage() {
             Agent console
           </h1>
           <p className="text-sm text-slate-600">
-            Go online to take video calls from your widget queue.
+            Go online to take video calls. Optionally show your camera live on
+            the widget before visitors join.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void toggleOnline()}
-          className={`rounded-xl px-5 py-3 text-sm font-semibold text-white ${
-            online
-              ? 'bg-emerald-600 hover:bg-emerald-700'
-              : 'bg-slate-700 hover:bg-slate-800'
-          }`}
-        >
-          {online ? 'Online — click to go offline' : 'Go online'}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void toggleLiveFeed()}
+            disabled={!!active}
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-white disabled:opacity-50 ${
+              liveFeed
+                ? 'bg-red-600 hover:bg-red-700'
+                : 'bg-slate-600 hover:bg-slate-700'
+            }`}
+          >
+            <Video size={16} />
+            {liveFeed ? 'Live feed on' : 'Show live feed'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void toggleOnline()}
+            className={`rounded-xl px-5 py-3 text-sm font-semibold text-white ${
+              online
+                ? 'bg-emerald-600 hover:bg-emerald-700'
+                : 'bg-slate-700 hover:bg-slate-800'
+            }`}
+          >
+            {online ? 'Online — click to go offline' : 'Go online'}
+          </button>
+        </div>
       </div>
 
       {error && (
         <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </p>
+      )}
+
+      {liveFeed && !active && (
+        <section className="rounded-3xl border border-red-200 bg-white p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">
+                Widget live feed
+              </p>
+              <p className="text-xs text-slate-500">
+                Visitors see this camera with a red LIVE badge before they start
+                a call. Mic is off in preview.
+              </p>
+            </div>
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+              Live
+            </span>
+          </div>
+          <div className="mx-auto max-w-xl">
+            <LiveFeedPublisher
+              companyId={company.id}
+              participantName={profile.displayName || 'Agent'}
+              onError={setError}
+            />
+          </div>
+        </section>
       )}
 
       {active?.roomName ? (
@@ -154,9 +239,8 @@ export default function ConsolePage() {
               <UserRound className="mb-3 text-slate-300" size={36} />
               <p className="font-medium text-slate-700">No visitors waiting</p>
               <p className="mt-1 text-sm text-slate-500">
-                Ask a visitor to open the widget, enter their name, and tap
-                Start video call — opening the bubble alone does not join the
-                queue.
+                When someone taps Start video call on your widget, they appear
+                here.
               </p>
             </div>
           ) : (

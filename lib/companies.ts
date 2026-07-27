@@ -38,6 +38,7 @@ export async function getCompanyBySlug(
     welcomeMessage:
       (data.welcomeMessage as string) || 'Talk to our team on video',
     ntfyTopic: (data.ntfyTopic as string) || '',
+    liveFeedActive: Boolean(data.liveFeedActive),
     createdAt: (data.createdAt as number) || Date.now(),
     ownerId: data.ownerId as string,
   };
@@ -53,6 +54,46 @@ export async function updateCompanySettings(
   >
 ): Promise<void> {
   await updateDoc(doc(getClientDb(), 'companies', companyId), updates);
+}
+
+export async function setLiveFeedActive(
+  companyId: string,
+  active: boolean
+): Promise<void> {
+  await updateDoc(doc(getClientDb(), 'companies', companyId), {
+    liveFeedActive: active,
+  });
+}
+
+export function subscribeCompany(
+  companyId: string,
+  onChange: (company: Company | null) => void,
+  db?: Firestore
+): Unsubscribe {
+  return onSnapshot(
+    doc(dbOrDefault(db), 'companies', companyId),
+    (snap) => {
+      if (!snap.exists()) {
+        onChange(null);
+        return;
+      }
+      const data = snap.data();
+      onChange({
+        id: companyId,
+        name: data.name as string,
+        slug: data.slug as string,
+        brandColor: (data.brandColor as string) || '#0f766e',
+        logoUrl: (data.logoUrl as string) || '',
+        welcomeMessage:
+          (data.welcomeMessage as string) || 'Talk to our team on video',
+        ntfyTopic: (data.ntfyTopic as string) || '',
+        liveFeedActive: Boolean(data.liveFeedActive),
+        createdAt: (data.createdAt as number) || Date.now(),
+        ownerId: data.ownerId as string,
+      });
+    },
+    () => onChange(null)
+  );
 }
 
 export async function setMemberOnline(

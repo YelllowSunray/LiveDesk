@@ -11,6 +11,8 @@ export interface Company {
   welcomeMessage: string;
   /** Free iPhone alerts via ntfy.sh topic (optional). */
   ntfyTopic: string;
+  /** When true, widget shows the agent's live camera preview. */
+  liveFeedActive: boolean;
   createdAt: number;
   ownerId: string;
 }

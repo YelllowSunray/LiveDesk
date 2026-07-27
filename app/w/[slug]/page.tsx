@@ -7,9 +7,11 @@ import {
   endSession,
   getCompanyBySlug,
   getQueuePosition,
+  subscribeCompany,
   subscribeMembersOnline,
   subscribeSession,
 } from '@/lib/companies';
+import { LiveFeedViewer } from '@/components/LiveFeedViewer';
 import {
   getWidgetDb,
   signInWidgetWithCustomToken,
@@ -57,6 +59,17 @@ export default function WidgetPage() {
     if (!company) return;
     return subscribeMembersOnline(company.id, setOnlineAgents, getWidgetDb());
   }, [company]);
+
+  useEffect(() => {
+    if (!company) return;
+    return subscribeCompany(
+      company.id,
+      (next) => {
+        if (next) setCompany(next);
+      },
+      getWidgetDb()
+    );
+  }, [company?.id]);
 
   useEffect(() => {
     if (!company || !session) return;
@@ -248,9 +261,9 @@ export default function WidgetPage() {
 
   return (
     <Shell>
-      <div className="flex h-full flex-col justify-between gap-6 overflow-y-auto p-6">
-        <div>
-          <div className="mb-4 flex items-center gap-3">
+      <div className="flex h-full flex-col justify-between gap-4 overflow-y-auto p-4 sm:p-6">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
             {company.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -271,12 +284,19 @@ export default function WidgetPage() {
               <p className="text-xs text-slate-500">{statusLabel}</p>
             </div>
           </div>
-          <h1 className="font-[family-name:var(--font-display)] text-2xl font-semibold text-slate-900">
-            {company.welcomeMessage}
-          </h1>
-          <p className="mt-2 text-sm text-slate-600">
-            Start a live video conversation with our team — no chat bots.
-          </p>
+
+          {company.liveFeedActive ? (
+            <LiveFeedViewer slug={slug} brandColor={brand} />
+          ) : (
+            <>
+              <h1 className="font-[family-name:var(--font-display)] text-2xl font-semibold text-slate-900">
+                {company.welcomeMessage}
+              </h1>
+              <p className="text-sm text-slate-600">
+                Start a live video conversation with our team — no chat bots.
+              </p>
+            </>
+          )}
         </div>
         <div className="space-y-3">
           {error && (
