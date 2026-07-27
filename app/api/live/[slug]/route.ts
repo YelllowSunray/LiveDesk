@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAppOrigin, liveWatchUrl } from '@/lib/app-url';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,11 +18,11 @@ export async function OPTIONS() {
 }
 
 /**
- * Public presence for embeds / host sites.
- * GET /api/status/[slug] → { online, onlineCount, liveFeedActive, brandColor, name }
+ * Public live-feed flag for host sites.
+ * GET /api/live/[slug] → { streaming: true | false, watchUrl, ... }
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ slug: string }> }
 ) {
   try {
@@ -54,33 +55,27 @@ export async function GET(
     }
 
     const data = companySnap.data() || {};
-    const membersSnap = await db
-      .collection('companies')
-      .doc(companyId)
-      .collection('members')
-      .where('online', '==', true)
-      .get();
-
-    const onlineCount = membersSnap.size;
-
     const streaming = Boolean(data.liveFeedActive);
+    const origin = getAppOrigin(request);
+    const watchUrl = liveWatchUrl(slug, request);
 
     return NextResponse.json(
       {
         slug,
-        name: (data.name as string) || 'LiveDesk',
-        brandColor: (data.brandColor as string) || '#0f766e',
-        online: onlineCount > 0,
-        onlineCount,
         streaming,
         liveFeedActive: streaming,
+        name: (data.name as string) || 'LiveDesk',
+        brandColor: (data.brandColor as string) || '#0f766e',
+        watchUrl,
+        embedUrl: watchUrl,
+        streamUrl: `${origin}/api/live/${encodeURIComponent(slug)}/stream`,
       },
       { headers: corsHeaders() }
     );
   } catch (err) {
-    console.error('status api error', err);
+    console.error('live status api error', err);
     return NextResponse.json(
-      { error: 'Failed to load status' },
+      { error: 'Failed to load live status' },
       { status: 500, headers: corsHeaders() }
     );
   }

@@ -15,6 +15,15 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        source: '/live/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: 'frame-ancestors *',
+          },
+        ],
+      },
+      {
         source: '/widget.js',
         headers: [
           {

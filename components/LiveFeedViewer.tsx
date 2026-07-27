@@ -8,23 +8,37 @@ import {
 } from '@livekit/components-react';
 import { Track } from 'livekit-client';
 
-function ViewerStage({ brandColor }: { brandColor: string }) {
+function ViewerStage({
+  brandColor,
+  fill,
+}: {
+  brandColor: string;
+  fill: boolean;
+}) {
   const tracks = useTracks(
     [{ source: Track.Source.Camera, withPlaceholder: false }],
     { onlySubscribed: true }
   );
   const remoteCam = tracks.find((t) => !t.participant.isLocal && t.publication);
 
+  const frameClass = fill
+    ? 'relative h-full w-full overflow-hidden bg-slate-950'
+    : 'relative aspect-[4/3] w-full overflow-hidden bg-slate-950';
+
   if (!remoteCam?.publication) {
     return (
-      <div className="flex aspect-[4/3] items-center justify-center bg-slate-900 text-sm text-slate-400">
+      <div
+        className={`${
+          fill ? 'flex h-full w-full' : 'flex aspect-[4/3]'
+        } items-center justify-center bg-slate-900 text-sm text-slate-400`}
+      >
         Waiting for live camera…
       </div>
     );
   }
 
   return (
-    <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-950">
+    <div className={frameClass}>
       <VideoTrack
         trackRef={remoteCam}
         className="h-full w-full object-cover"
@@ -44,11 +58,16 @@ function ViewerStage({ brandColor }: { brandColor: string }) {
 interface LiveFeedViewerProps {
   slug: string;
   brandColor?: string;
+  /** Fill parent height (for /live/[slug] embeds). */
+  fill?: boolean;
+  rounded?: boolean;
 }
 
 export function LiveFeedViewer({
   slug,
   brandColor = '#0f766e',
+  fill = false,
+  rounded = true,
 }: LiveFeedViewerProps) {
   const [token, setToken] = useState('');
   const [wsUrl, setWsUrl] = useState('');
@@ -58,10 +77,9 @@ export function LiveFeedViewer({
     let cancelled = false;
     async function connect() {
       try {
-        const res = await fetch('/api/livekit-preview-token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ role: 'viewer', slug }),
+        const res = await fetch(`/api/live/${encodeURIComponent(slug)}/stream`, {
+          method: 'GET',
+          cache: 'no-store',
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Live feed unavailable');
@@ -82,19 +100,36 @@ export function LiveFeedViewer({
   }, [slug]);
 
   if (error) {
+    if (fill) {
+      return (
+        <div className="flex h-full w-full items-center justify-center bg-slate-950 text-sm text-slate-400">
+          Live feed unavailable
+        </div>
+      );
+    }
     return null;
   }
 
   if (!token || !wsUrl) {
     return (
-      <div className="flex aspect-[4/3] items-center justify-center rounded-2xl bg-slate-100 text-sm text-slate-500">
+      <div
+        className={`${
+          fill ? 'flex h-full w-full' : 'flex aspect-[4/3]'
+        } items-center justify-center ${
+          rounded ? 'rounded-2xl' : ''
+        } bg-slate-100 text-sm text-slate-500`}
+      >
         Loading live feed…
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
+    <div
+      className={`h-full w-full overflow-hidden ${
+        rounded ? 'rounded-2xl border border-slate-200 shadow-sm' : ''
+      }`}
+    >
       <LiveKitRoom
         token={token}
         serverUrl={wsUrl}
@@ -102,9 +137,9 @@ export function LiveFeedViewer({
         audio={false}
         connectOptions={{ autoSubscribe: true }}
         onError={(err) => setError(err.message)}
-        className="w-full"
+        className="h-full w-full"
       >
-        <ViewerStage brandColor={brandColor} />
+        <ViewerStage brandColor={brandColor} fill={fill} />
       </LiveKitRoom>
     </div>
   );

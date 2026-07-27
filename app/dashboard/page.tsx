@@ -291,17 +291,38 @@ export default function DashboardPage() {
           {copied ? <Check size={16} /> : <Copy size={16} />}
           {copied ? 'Copied' : 'Copy snippet'}
         </button>
-        <p className="mt-4 text-xs leading-relaxed text-slate-500">
-          Status API:{' '}
-          <code className="rounded bg-slate-100 px-1 py-0.5 text-[11px]">
-            {appUrl}/api/status/{companySlug}
-          </code>
-          . Or listen on the page:{' '}
-          <code className="rounded bg-slate-100 px-1 py-0.5 text-[11px]">
-            LiveDesk.onStatus(...)
-          </code>
-          .
-        </p>
+        <div className="mt-4 space-y-2 text-xs leading-relaxed text-slate-500">
+          <p>
+            Online status:{' '}
+            <code className="rounded bg-slate-100 px-1 py-0.5 text-[11px]">
+              GET {appUrl}/api/status/{companySlug}
+            </code>
+          </p>
+          <p>
+            Watch / embed page (same feed as the widget lobby):{' '}
+            <code className="rounded bg-slate-100 px-1 py-0.5 text-[11px]">
+              {appUrl}/live/{companySlug}
+            </code>
+          </p>
+          <p>
+            Streaming true/false:{' '}
+            <code className="rounded bg-slate-100 px-1 py-0.5 text-[11px]">
+              GET {appUrl}/api/live/{companySlug}
+            </code>
+          </p>
+          <p>
+            Stream credentials (includes <code>watchUrl</code>):{' '}
+            <code className="rounded bg-slate-100 px-1 py-0.5 text-[11px]">
+              GET {appUrl}/api/live/{companySlug}/stream
+            </code>
+          </p>
+          <p>
+            Or listen on the page:{' '}
+            <code className="rounded bg-slate-100 px-1 py-0.5 text-[11px]">
+              LiveDesk.onStatus(...)
+            </code>
+          </p>
+        </div>
         <div className="mt-6 rounded-2xl border border-teal-100 bg-teal-50/70 p-4 text-sm text-teal-900">
           <p className="font-semibold">Preview</p>
           <p className="mt-1">

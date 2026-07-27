@@ -25,6 +25,7 @@
   var status = {
     online: false,
     onlineCount: 0,
+    streaming: false,
     liveFeedActive: false,
     name: '',
     brandColor: brandColor,
@@ -102,6 +103,7 @@
       company: company,
       online: status.online,
       onlineCount: status.onlineCount,
+      streaming: status.streaming,
       liveFeedActive: status.liveFeedActive,
       name: status.name,
       brandColor: status.brandColor,
@@ -125,10 +127,12 @@
   }
 
   function applyStatus(next) {
+    var streaming = !!(next.streaming || next.liveFeedActive);
     status = {
       online: !!next.online,
       onlineCount: next.onlineCount || 0,
-      liveFeedActive: !!next.liveFeedActive,
+      streaming: streaming,
+      liveFeedActive: streaming,
       name: next.name || '',
       brandColor: next.brandColor || brandColor,
     };
@@ -178,6 +182,7 @@
       company: company,
       online: false,
       onlineCount: 0,
+      streaming: false,
       liveFeedActive: false,
       name: '',
       brandColor: brandColor,
