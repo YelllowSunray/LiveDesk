@@ -4,7 +4,6 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { VideoCall } from '@/components/VideoCall';
 import {
-  createVisitorSession,
   endSession,
   getCompanyBySlug,
   getQueuePosition,
@@ -12,8 +11,8 @@ import {
   subscribeSession,
 } from '@/lib/companies';
 import {
-  ensureWidgetAnonymousUser,
   getWidgetDb,
+  signInWidgetWithCustomToken,
 } from '@/lib/firebase/widget-client';
 import type { CallSession, Company } from '@/lib/types';
 
@@ -23,7 +22,6 @@ export default function WidgetPage() {
 
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
-  const [authReady, setAuthReady] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [visitorName, setVisitorName] = useState('');
   const [session, setSession] = useState<CallSession | null>(null);
@@ -31,30 +29,6 @@ export default function WidgetPage() {
   const [onlineAgents, setOnlineAgents] = useState(0);
   const [error, setError] = useState('');
   const [joining, setJoining] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function boot() {
-      try {
-        await ensureWidgetAnonymousUser();
-        if (!cancelled) setAuthReady(true);
-      } catch (err) {
-        console.error(err);
-        if (!cancelled) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : 'Could not start visitor session. Enable Anonymous Auth in Firebase.'
-          );
-          setAuthReady(true);
-        }
-      }
-    }
-    void boot();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,9 +55,9 @@ export default function WidgetPage() {
   }, [slug]);
 
   useEffect(() => {
-    if (!company || !authReady) return;
+    if (!company) return;
     return subscribeMembersOnline(company.id, setOnlineAgents, getWidgetDb());
-  }, [company, authReady]);
+  }, [company]);
 
   useEffect(() => {
     if (!company || !session) return;
@@ -126,7 +100,7 @@ export default function WidgetPage() {
 
   async function onJoin(e: FormEvent) {
     e.preventDefault();
-    if (!company) return;
+    if (!company || !slug) return;
     const name = visitorName.trim();
     if (!name) {
       setError('Please enter your name');
@@ -135,24 +109,17 @@ export default function WidgetPage() {
     setJoining(true);
     setError('');
     try {
-      const user = await ensureWidgetAnonymousUser();
-      const sessionId = await createVisitorSession(
-        company.id,
-        user.uid,
-        name,
-        getWidgetDb()
-      );
-      setSession({
-        id: sessionId,
-        visitorName: name,
-        visitorUid: user.uid,
-        status: 'waiting',
-        roomName: null,
-        agentId: null,
-        createdAt: Date.now(),
-        connectedAt: null,
-        endedAt: null,
+      const res = await fetch('/api/visitor/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug, visitorName: name }),
       });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Could not join queue');
+      }
+      await signInWidgetWithCustomToken(data.customToken as string);
+      setSession(data.session as CallSession);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not join queue');
     } finally {
@@ -327,7 +294,7 @@ export default function WidgetPage() {
           )}
           <button
             type="submit"
-            disabled={joining || !authReady}
+            disabled={joining}
             className="w-full rounded-xl px-4 py-3 font-semibold text-white disabled:opacity-60"
             style={{ backgroundColor: brand }}
           >

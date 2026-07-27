@@ -1,7 +1,12 @@
 'use client';
 
 import { initializeApp, getApp, getApps, type FirebaseApp } from 'firebase/app';
-import { getAuth, signInAnonymously, type Auth, type User } from 'firebase/auth';
+import {
+  getAuth,
+  signInWithCustomToken,
+  type Auth,
+  type User,
+} from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
 
 const WIDGET_APP_NAME = 'livedesk-widget';
@@ -37,11 +42,9 @@ export function getWidgetDb(): Firestore {
   return getFirestore(getWidgetApp());
 }
 
-export async function ensureWidgetAnonymousUser(): Promise<User> {
-  const auth = getWidgetAuth();
-  if (auth.currentUser?.isAnonymous) {
-    return auth.currentUser;
-  }
-  const cred = await signInAnonymously(auth);
+export async function signInWidgetWithCustomToken(
+  customToken: string
+): Promise<User> {
+  const cred = await signInWithCustomToken(getWidgetAuth(), customToken);
   return cred.user;
 }
