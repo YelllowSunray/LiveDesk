@@ -277,8 +277,8 @@ export default function DashboardPage() {
           Embed on your site
         </h2>
         <p className="mt-1 text-sm text-slate-600">
-          Paste this snippet before <code>&lt;/body&gt;</code>. Visitors get a
-          floating “Talk to us” button.
+          Paste this snippet before <code>&lt;/body&gt;</code>. The button shows
+          online/offline from your agent console (“Go online”).
         </p>
         <pre className="mt-4 overflow-x-auto rounded-2xl bg-slate-900 p-4 text-xs leading-relaxed text-teal-100">
           {embedSnippet}
@@ -291,6 +291,17 @@ export default function DashboardPage() {
           {copied ? <Check size={16} /> : <Copy size={16} />}
           {copied ? 'Copied' : 'Copy snippet'}
         </button>
+        <p className="mt-4 text-xs leading-relaxed text-slate-500">
+          Status API:{' '}
+          <code className="rounded bg-slate-100 px-1 py-0.5 text-[11px]">
+            {appUrl}/api/status/{companySlug}
+          </code>
+          . Or listen on the page:{' '}
+          <code className="rounded bg-slate-100 px-1 py-0.5 text-[11px]">
+            LiveDesk.onStatus(...)
+          </code>
+          .
+        </p>
         <div className="mt-6 rounded-2xl border border-teal-100 bg-teal-50/70 p-4 text-sm text-teal-900">
           <p className="font-semibold">Preview</p>
           <p className="mt-1">
