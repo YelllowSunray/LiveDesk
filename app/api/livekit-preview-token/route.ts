@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export function previewRoomName(companyId: string) {
+function previewRoomName(companyId: string) {
   return `preview_${companyId}`.slice(0, 64);
 }
 
