@@ -37,6 +37,7 @@ export async function getCompanyBySlug(
     logoUrl: (data.logoUrl as string) || '',
     welcomeMessage:
       (data.welcomeMessage as string) || 'Talk to our team on video',
+    ntfyTopic: (data.ntfyTopic as string) || '',
     createdAt: (data.createdAt as number) || Date.now(),
     ownerId: data.ownerId as string,
   };
@@ -45,7 +46,10 @@ export async function getCompanyBySlug(
 export async function updateCompanySettings(
   companyId: string,
   updates: Partial<
-    Pick<Company, 'name' | 'brandColor' | 'logoUrl' | 'welcomeMessage'>
+    Pick<
+      Company,
+      'name' | 'brandColor' | 'logoUrl' | 'welcomeMessage' | 'ntfyTopic'
+    >
   >
 ): Promise<void> {
   await updateDoc(doc(getClientDb(), 'companies', companyId), updates);

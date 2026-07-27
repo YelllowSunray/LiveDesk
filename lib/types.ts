@@ -9,6 +9,8 @@ export interface Company {
   brandColor: string;
   logoUrl: string;
   welcomeMessage: string;
+  /** Free iPhone alerts via ntfy.sh topic (optional). */
+  ntfyTopic: string;
   createdAt: number;
   ownerId: string;
 }

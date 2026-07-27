@@ -66,6 +66,7 @@ async function loadCompany(companyId: string): Promise<Company | null> {
     logoUrl: (data.logoUrl as string) || '',
     welcomeMessage:
       (data.welcomeMessage as string) || 'Talk to our team on video',
+    ntfyTopic: (data.ntfyTopic as string) || '',
     createdAt: (data.createdAt as number) || Date.now(),
     ownerId: data.ownerId as string,
   };
@@ -160,6 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         brandColor: '#0f766e',
         logoUrl: '',
         welcomeMessage: 'Talk to our team on video',
+        ntfyTopic: '',
         createdAt: now,
         ownerId: cred.user.uid,
       });

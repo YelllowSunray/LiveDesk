@@ -20,6 +20,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Company not found' }, { status: 404 });
     }
     const companyId = slugSnap.data()!.companyId as string;
+    const companySnap = await db.collection('companies').doc(companyId).get();
+    const companyData = companySnap.data() || {};
+    const companyName = (companyData.name as string) || 'LiveDesk';
+    const ntfyTopic = (companyData.ntfyTopic as string) || '';
 
     const visitorUid = `vis_${randomUUID().replace(/-/g, '')}`;
     const visitorName = `Visitor ${visitorUid.slice(-4).toUpperCase()}`;
@@ -45,6 +49,20 @@ export async function POST(request: NextRequest) {
       role: 'visitor',
       companyId,
     });
+
+    if (ntfyTopic) {
+      const { notifyVisitorWaiting } = await import('@/lib/notify');
+      const appUrl = (
+        process.env.NEXT_PUBLIC_APP_URL || 'https://live-desk-taupe.vercel.app'
+      ).replace(/\/$/, '');
+      // Don't block the visitor on notification delivery.
+      void notifyVisitorWaiting({
+        ntfyTopic,
+        companyName,
+        visitorName,
+        consoleUrl: `${appUrl}/dashboard/console`,
+      });
+    }
 
     return NextResponse.json({
       customToken,
