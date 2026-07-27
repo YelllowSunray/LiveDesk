@@ -11,12 +11,12 @@ export async function notifyVisitorWaiting(input: {
   const topic = sanitizeNtfyTopic(input.ntfyTopic);
   if (!topic) return;
 
-  const title = `${input.companyName}: visitor waiting`;
-  const body = `${input.visitorName} joined the LiveDesk queue. Open the agent console to accept.`;
+  const title = 'New LiveDesk video call';
+  const body = `Someone wants to talk on video (${input.visitorName}). Open the agent console to accept.`;
   const headers: Record<string, string> = {
     Title: title,
-    Priority: 'high',
-    Tags: 'telephone_receiver,bell',
+    Priority: 'urgent',
+    Tags: 'telephone_receiver,rotating_light',
   };
   if (input.consoleUrl) {
     headers.Click = input.consoleUrl;

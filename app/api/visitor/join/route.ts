@@ -55,8 +55,8 @@ export async function POST(request: NextRequest) {
       const appUrl = (
         process.env.NEXT_PUBLIC_APP_URL || 'https://live-desk-taupe.vercel.app'
       ).replace(/\/$/, '');
-      // Don't block the visitor on notification delivery.
-      void notifyVisitorWaiting({
+      // Must await on Vercel — fire-and-forget is killed when the response returns.
+      await notifyVisitorWaiting({
         ntfyTopic,
         companyName,
         visitorName,
