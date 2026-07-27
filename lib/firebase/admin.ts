@@ -9,11 +9,25 @@ import { getAuth, type Auth } from 'firebase-admin/auth';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 
 /**
- * Vercel/env pastes of PEM keys come in many broken shapes:
- * quoted, literal \n, real newlines, or mixed. Normalize to a valid PEM.
+ * Prefer FIREBASE_ADMIN_PRIVATE_KEY_BASE64 on Vercel (avoids PEM newline issues).
+ * Falls back to FIREBASE_ADMIN_PRIVATE_KEY with common escaping fixes.
  */
 function normalizePrivateKey(raw: string): string {
   let key = raw.trim();
+
+  // Base64-encoded full PEM
+  if (!key.includes('BEGIN') && /^[A-Za-z0-9+/=\s]+$/.test(key)) {
+    try {
+      const decoded = Buffer.from(key.replace(/\s+/g, ''), 'base64').toString(
+        'utf8'
+      );
+      if (decoded.includes('BEGIN')) {
+        key = decoded.trim();
+      }
+    } catch {
+      // keep original
+    }
+  }
 
   if (
     (key.startsWith('"') && key.endsWith('"')) ||
@@ -22,7 +36,6 @@ function normalizePrivateKey(raw: string): string {
     key = key.slice(1, -1).trim();
   }
 
-  // Handle double-escaped and single-escaped newlines
   key = key.replace(/\\\\n/g, '\n').replace(/\\n/g, '\n');
   key = key.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
@@ -37,7 +50,7 @@ function normalizePrivateKey(raw: string): string {
     !key.includes('BEGIN RSA PRIVATE KEY')
   ) {
     throw new Error(
-      'FIREBASE_ADMIN_PRIVATE_KEY is not a valid PEM key. Paste the full key including BEGIN/END lines, using \\n for newlines in Vercel.'
+      'FIREBASE_ADMIN_PRIVATE_KEY is not a valid PEM key. Set FIREBASE_ADMIN_PRIVATE_KEY_BASE64 on Vercel.'
     );
   }
 
@@ -47,11 +60,13 @@ function normalizePrivateKey(raw: string): string {
 function getServiceAccount(): ServiceAccount {
   const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID?.trim();
   const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL?.trim();
-  const rawKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY;
+  const rawKey =
+    process.env.FIREBASE_ADMIN_PRIVATE_KEY_BASE64?.trim() ||
+    process.env.FIREBASE_ADMIN_PRIVATE_KEY;
 
   if (!projectId || !clientEmail || !rawKey) {
     throw new Error(
-      'Missing Firebase Admin credentials. Set FIREBASE_ADMIN_PROJECT_ID, FIREBASE_ADMIN_CLIENT_EMAIL, and FIREBASE_ADMIN_PRIVATE_KEY.'
+      'Missing Firebase Admin credentials. Set FIREBASE_ADMIN_PROJECT_ID, FIREBASE_ADMIN_CLIENT_EMAIL, and FIREBASE_ADMIN_PRIVATE_KEY_BASE64.'
     );
   }
 
@@ -62,11 +77,16 @@ function getServiceAccount(): ServiceAccount {
   };
 }
 
+let cachedApp: App | null = null;
+
 function getAdminApp(): App {
+  if (cachedApp) return cachedApp;
   if (getApps().length) {
-    return getApps()[0]!;
+    cachedApp = getApps()[0]!;
+    return cachedApp;
   }
-  return initializeApp({ credential: cert(getServiceAccount()) });
+  cachedApp = initializeApp({ credential: cert(getServiceAccount()) });
+  return cachedApp;
 }
 
 export function getAdminAuth(): Auth {

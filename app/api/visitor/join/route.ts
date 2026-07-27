@@ -2,6 +2,9 @@ import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminAuth, getAdminDb } from '@/lib/firebase/admin';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -62,14 +65,16 @@ export async function POST(request: NextRequest) {
     console.error('visitor join failed:', error);
     const message =
       error instanceof Error ? error.message : 'Failed to join queue';
-    // Surface config mistakes (bad PEM, missing env) so the widget can show them.
     const isConfigError =
-      /private key|PEM|credentials|FIREBASE_ADMIN|pattern/i.test(message);
+      /private key|PEM|credentials|FIREBASE_ADMIN|pattern|base64/i.test(
+        message
+      );
     return NextResponse.json(
       {
         error: isConfigError
-          ? 'Server Firebase Admin credentials are invalid. Check FIREBASE_ADMIN_PRIVATE_KEY on Vercel (use \\n newlines).'
+          ? 'Server Firebase Admin credentials are invalid. Check FIREBASE_ADMIN_* on Vercel.'
           : 'Failed to join queue',
+        detail: process.env.NODE_ENV === 'development' ? message : undefined,
       },
       { status: 500 }
     );
