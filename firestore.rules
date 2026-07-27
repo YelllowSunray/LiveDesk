@@ -1,0 +1,65 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isMember(companyId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/companies/$(companyId)/members/$(request.auth.uid));
+    }
+
+    function memberData(companyId) {
+      return get(/databases/$(database)/documents/companies/$(companyId)/members/$(request.auth.uid)).data;
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create: if signedIn() && request.auth.uid == uid;
+      allow update: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /slugs/{slug} {
+      allow read: if true;
+      allow create: if signedIn();
+      allow update, delete: if false;
+    }
+
+    match /companies/{companyId} {
+      allow read: if true;
+      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isMember(companyId);
+      allow delete: if isMember(companyId) && memberData(companyId).role == 'owner';
+
+      match /members/{uid} {
+        allow read: if signedIn();
+        allow create: if signedIn() && (
+          request.auth.uid == uid
+          || isMember(companyId)
+        );
+        allow update: if isMember(companyId) && (
+          request.auth.uid == uid
+          || memberData(companyId).role == 'owner'
+        );
+        allow delete: if isMember(companyId) && memberData(companyId).role == 'owner';
+      }
+
+      match /sessions/{sessionId} {
+        allow read: if isMember(companyId)
+          || (signedIn() && resource.data.visitorUid == request.auth.uid);
+        allow create: if signedIn()
+          && request.resource.data.visitorUid == request.auth.uid
+          && request.resource.data.status == 'waiting'
+          && request.resource.data.roomName == null
+          && request.resource.data.agentId == null;
+        allow update: if isMember(companyId)
+          || (signedIn()
+            && resource.data.visitorUid == request.auth.uid
+            && request.resource.data.status == 'ended'
+            && request.resource.data.visitorUid == resource.data.visitorUid);
+        allow delete: if isMember(companyId);
+      }
+    }
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "name": "studycenter",
+  "name": "livedesk",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -11,6 +11,8 @@
   "dependencies": {
     "@livekit/components-react": "^2.9.16",
     "@livekit/components-styles": "^1.2.0",
+    "firebase": "^12.16.0",
+    "firebase-admin": "^14.2.0",
     "livekit-client": "^2.16.0",
     "livekit-server-sdk": "^2.14.2",
     "lucide-react": "^0.554.0",
@@ -21,7 +23,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^20.19.43",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
