@@ -83,12 +83,25 @@ export default function DashboardPage() {
   async function sendTestNotification() {
     const topic = sanitizeNtfyTopic(ntfyTopic);
     if (!topic) {
-      setMessage('Save a valid ntfy topic first');
+      setMessage(
+        'Enter a valid ntfy topic (3–64 chars: letters, numbers, _ or -)'
+      );
       return;
     }
     setTestingNotify(true);
     setMessage('');
     try {
+      // Always persist first — live joins only read the saved Firestore value.
+      await updateCompanySettings(companyId, {
+        name: name.trim(),
+        brandColor,
+        logoUrl: logoUrl.trim(),
+        welcomeMessage: welcomeMessage.trim(),
+        ntfyTopic: topic,
+      });
+      await refreshCompany();
+      setNtfyTopic(topic);
+
       const res = await fetch('/api/notify/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -96,7 +109,9 @@ export default function DashboardPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Test failed');
-      setMessage('Test notification sent — check your iPhone');
+      setMessage(
+        'Topic saved + test sent. Real website video calls will notify you now.'
+      );
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Test failed');
     } finally {
@@ -201,8 +216,23 @@ export default function DashboardPage() {
                   In the app, tap +, subscribe to a topic (use a hard-to-guess
                   name)
                 </li>
-                <li>Paste that topic below and save</li>
+                <li>
+                  Paste that topic below, then click{' '}
+                  <strong>Send test notification</strong> (this also saves it)
+                </li>
               </ol>
+              {!company.ntfyTopic && (
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
+                  Alerts are not active yet — topic not saved. Website video
+                  calls will not notify you until you save/test below.
+                </p>
+              )}
+              {company.ntfyTopic && (
+                <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-900">
+                  Alerts active for topic ending in …
+                  {company.ntfyTopic.slice(-6)}
+                </p>
+              )}
             </div>
             <label className="block space-y-1.5">
               <span className="text-sm font-medium text-slate-700">
