@@ -7,6 +7,7 @@ import {
   VideoConference,
   useRoomContext,
 } from '@livekit/components-react';
+import { LocalVideoTrack, Track } from 'livekit-client';
 import { Menu, PhoneOff, X } from 'lucide-react';
 import { getClientAuth } from '@/lib/firebase/client';
 import { getWidgetAuth } from '@/lib/firebase/widget-client';
@@ -24,6 +25,47 @@ interface VideoCallProps {
   onEnded?: () => void;
   /** Visitors must use the isolated widget Firebase app. */
   auth?: 'default' | 'widget';
+  /**
+   * When the agent is also broadcasting a lobby live feed, pass the shared
+   * camera so the call can clone it instead of grabbing the device again.
+   */
+  sharedCameraTrack?: LocalVideoTrack | null;
+}
+
+function PublishSharedOrCloneCamera({ track }: { track: LocalVideoTrack }) {
+  const room = useRoomContext();
+
+  useEffect(() => {
+    let published: LocalVideoTrack | null = null;
+    let cancelled = false;
+
+    async function publish() {
+      try {
+        const clone = new LocalVideoTrack(track.mediaStreamTrack.clone());
+        published = clone;
+        await room.localParticipant.publishTrack(clone, {
+          source: Track.Source.Camera,
+        });
+      } catch (err) {
+        if (!cancelled) console.error('call camera publish failed', err);
+      }
+    }
+
+    void publish();
+
+    return () => {
+      cancelled = true;
+      if (published) {
+        try {
+          room.localParticipant.unpublishTrack(published, true);
+        } catch {
+          published.stop();
+        }
+      }
+    };
+  }, [room, track]);
+
+  return null;
 }
 
 function CallRoomContent({
@@ -31,17 +73,22 @@ function CallRoomContent({
   participantName,
   brandColor,
   onEnded,
+  sharedCameraTrack,
 }: {
   title: string;
   participantName: string;
   brandColor: string;
   onEnded?: () => void;
+  sharedCameraTrack?: LocalVideoTrack | null;
 }) {
   const room = useRoomContext();
   const [showTools, setShowTools] = useState(false);
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-slate-950">
+      {sharedCameraTrack && (
+        <PublishSharedOrCloneCamera track={sharedCameraTrack} />
+      )}
       <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-3 py-2.5 sm:px-4">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-white">{title}</p>
@@ -72,7 +119,6 @@ function CallRoomContent({
       </div>
 
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
-        {/* Left sidebar — Pomodoro + Radio (same as previous StudyRoom) */}
         <aside
           className={`${
             showTools ? 'flex' : 'hidden'
@@ -95,7 +141,6 @@ function CallRoomContent({
           </div>
         </aside>
 
-        {/* Video stage */}
         <div
           className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-slate-950"
           style={{ ['--lk-accent-bg' as string]: brandColor }}
@@ -118,10 +163,12 @@ export function VideoCall({
   title = 'LiveDesk Call',
   onEnded,
   auth = 'default',
+  sharedCameraTrack = null,
 }: VideoCallProps) {
   const [token, setToken] = useState('');
   const [wsUrl, setWsUrl] = useState('');
   const [error, setError] = useState('');
+  const useSharedCam = role === 'agent' && !!sharedCameraTrack;
 
   useEffect(() => {
     let cancelled = false;
@@ -198,7 +245,7 @@ export function VideoCall({
   return (
     <div className="h-full min-h-[320px] overflow-hidden rounded-2xl">
       <LiveKitRoom
-        video
+        video={!useSharedCam}
         audio
         token={token}
         serverUrl={wsUrl}
@@ -212,6 +259,7 @@ export function VideoCall({
           participantName={participantName}
           brandColor={brandColor}
           onEnded={onEnded}
+          sharedCameraTrack={useSharedCam ? sharedCameraTrack : null}
         />
       </LiveKitRoom>
     </div>

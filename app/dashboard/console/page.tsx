@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Headphones, UserRound, Video } from 'lucide-react';
 import { VideoCall } from '@/components/VideoCall';
-import { LiveFeedPublisher } from '@/components/LiveFeedPublisher';
+import {
+  LiveFeedPublisher,
+  useSharedAgentCamera,
+} from '@/components/LiveFeedPublisher';
 import { useAuth } from '@/lib/firebase/auth-context';
 import {
   acceptSession,
@@ -24,6 +27,14 @@ export default function ConsolePage() {
   const [active, setActive] = useState<CallSession | null>(null);
   const [error, setError] = useState('');
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
+
+  // Keep camera alive while live feed is on (including during 1:1 calls).
+  const { track: sharedCamera, error: cameraError } =
+    useSharedAgentCamera(liveFeed);
+
+  useEffect(() => {
+    if (cameraError) setError(cameraError);
+  }, [cameraError]);
 
   useEffect(() => {
     if (!company || !user) return;
@@ -106,11 +117,7 @@ export default function ConsolePage() {
     setAcceptingId(session.id);
     setError('');
     try {
-      // Pause lobby preview while on a 1:1 call (camera is needed for the call).
-      if (liveFeed) {
-        await setLiveFeedActive(company.id, false);
-        setLiveFeed(false);
-      }
+      // Keep live feed on so other visitors still see the lobby camera.
       await acceptSession(company.id, session.id, user.uid);
       setActive({
         ...session,
@@ -142,16 +149,15 @@ export default function ConsolePage() {
             Agent console
           </h1>
           <p className="text-sm text-slate-600">
-            Go online to take video calls. Optionally show your camera live on
-            the widget before visitors join.
+            Live feed stays on during calls so other visitors can still see you
+            on the widget.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => void toggleLiveFeed()}
-            disabled={!!active}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-white disabled:opacity-50 ${
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-white ${
               liveFeed
                 ? 'bg-red-600 hover:bg-red-700'
                 : 'bg-slate-600 hover:bg-slate-700'
@@ -180,30 +186,43 @@ export default function ConsolePage() {
         </p>
       )}
 
-      {liveFeed && !active && (
-        <section className="rounded-3xl border border-red-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-900">
-                Widget live feed
-              </p>
-              <p className="text-xs text-slate-500">
-                Visitors see this camera with a red LIVE badge before they start
-                a call. Mic is off in preview.
-              </p>
+      {liveFeed && sharedCamera && (
+        <section
+          className={`rounded-3xl border border-red-200 bg-white shadow-sm ${
+            active ? 'p-3' : 'p-4'
+          }`}
+        >
+          {!active && (
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">
+                  Widget live feed
+                </p>
+                <p className="text-xs text-slate-500">
+                  Visitors see this camera with a red LIVE badge. Stays on while
+                  you take calls.
+                </p>
+              </div>
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+                Live
+              </span>
             </div>
-            <span className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
-              Live
-            </span>
-          </div>
-          <div className="mx-auto max-w-xl">
+          )}
+          <div className={active ? 'max-w-[180px]' : 'mx-auto max-w-xl'}>
             <LiveFeedPublisher
               companyId={company.id}
               participantName={profile.displayName || 'Agent'}
+              cameraTrack={sharedCamera}
+              compact={!!active}
               onError={setError}
             />
           </div>
+          {active && (
+            <p className="mt-2 text-xs text-slate-500">
+              Lobby LIVE feed still broadcasting to the widget.
+            </p>
+          )}
         </section>
       )}
 
@@ -218,6 +237,7 @@ export default function ConsolePage() {
             brandColor={company.brandColor}
             title={`Call with ${active.visitorName}`}
             onEnded={() => void onEndCall()}
+            sharedCameraTrack={liveFeed ? sharedCamera : null}
           />
         </div>
       ) : (

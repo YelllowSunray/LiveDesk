@@ -3,14 +3,51 @@
 import { useEffect, useState } from 'react';
 import {
   LiveKitRoom,
-  RoomAudioRenderer,
-  useTracks,
+  useRoomContext,
   VideoTrack,
+  useTracks,
 } from '@livekit/components-react';
-import { Track } from 'livekit-client';
+import {
+  LocalVideoTrack,
+  Track,
+  createLocalVideoTrack,
+} from 'livekit-client';
 import { getClientAuth } from '@/lib/firebase/client';
 
-function PublisherStage() {
+function PublishSharedCamera({ track }: { track: LocalVideoTrack }) {
+  const room = useRoomContext();
+
+  useEffect(() => {
+    let cancelled = false;
+    async function publish() {
+      try {
+        // Avoid double-publish if already present.
+        const existing = room.localParticipant
+          .getTrackPublications()
+          .find((p) => p.source === Track.Source.Camera);
+        if (existing?.track) return;
+        await room.localParticipant.publishTrack(track, {
+          source: Track.Source.Camera,
+        });
+      } catch (err) {
+        if (!cancelled) console.error('preview publish failed', err);
+      }
+    }
+    void publish();
+    return () => {
+      cancelled = true;
+      try {
+        room.localParticipant.unpublishTrack(track, false);
+      } catch {
+        // room may already be disconnected
+      }
+    };
+  }, [room, track]);
+
+  return null;
+}
+
+function PublisherStage({ track }: { track: LocalVideoTrack }) {
   const tracks = useTracks(
     [{ source: Track.Source.Camera, withPlaceholder: true }],
     { onlySubscribed: false }
@@ -25,15 +62,20 @@ function PublisherStage() {
           className="h-full w-full object-cover"
         />
       ) : (
-        <div className="flex h-full items-center justify-center text-sm text-slate-400">
-          Starting camera…
-        </div>
+        <video
+          ref={(el) => {
+            if (el) track.attach(el);
+          }}
+          muted
+          playsInline
+          autoPlay
+          className="h-full w-full object-cover"
+        />
       )}
       <div className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-md bg-red-600 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
         Live
       </div>
-      <RoomAudioRenderer />
     </div>
   );
 }
@@ -41,12 +83,16 @@ function PublisherStage() {
 interface LiveFeedPublisherProps {
   companyId: string;
   participantName: string;
+  cameraTrack: LocalVideoTrack;
+  compact?: boolean;
   onError?: (message: string) => void;
 }
 
 export function LiveFeedPublisher({
   companyId,
   participantName,
+  cameraTrack,
+  compact = false,
   onError,
 }: LiveFeedPublisherProps) {
   const [token, setToken] = useState('');
@@ -113,16 +159,75 @@ export function LiveFeedPublisher({
     <LiveKitRoom
       token={token}
       serverUrl={wsUrl}
-      video
+      video={false}
       audio={false}
-      connectOptions={{ autoSubscribe: true }}
+      connectOptions={{ autoSubscribe: false }}
       onError={(err) => {
         setError(err.message);
         onError?.(err.message);
       }}
-      className="w-full"
+      className={compact ? 'w-40' : 'w-full'}
     >
-      <PublisherStage />
+      <PublishSharedCamera track={cameraTrack} />
+      {!compact && <PublisherStage track={cameraTrack} />}
+      {compact && (
+        <div className="relative overflow-hidden rounded-xl bg-slate-950">
+          <video
+            ref={(el) => {
+              if (el) cameraTrack.attach(el);
+            }}
+            muted
+            playsInline
+            autoPlay
+            className="aspect-video w-full object-cover"
+          />
+          <div className="absolute left-2 top-2 inline-flex items-center gap-1 rounded bg-red-600 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
+            Live
+          </div>
+        </div>
+      )}
     </LiveKitRoom>
   );
+}
+
+/** Create/stop the shared agent camera used by lobby feed + 1:1 calls. */
+export function useSharedAgentCamera(enabled: boolean) {
+  const [track, setTrack] = useState<LocalVideoTrack | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    let created: LocalVideoTrack | null = null;
+
+    async function start() {
+      if (!enabled) return;
+      try {
+        created = await createLocalVideoTrack({
+          facingMode: 'user',
+        });
+        if (cancelled) {
+          created.stop();
+          return;
+        }
+        setTrack(created);
+        setError('');
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error ? err.message : 'Could not access camera'
+          );
+        }
+      }
+    }
+
+    void start();
+
+    return () => {
+      cancelled = true;
+      created?.stop();
+      setTrack(null);
+    };
+  }, [enabled]);
+
+  return { track, error };
 }
