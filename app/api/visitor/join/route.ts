@@ -6,20 +6,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const slug = typeof body.slug === 'string' ? body.slug.trim() : '';
-    const visitorName =
-      typeof body.visitorName === 'string' ? body.visitorName.trim() : '';
 
-    if (!slug || !visitorName) {
-      return NextResponse.json(
-        { error: 'Missing slug or visitorName' },
-        { status: 400 }
-      );
-    }
-    if (visitorName.length > 80) {
-      return NextResponse.json(
-        { error: 'Name is too long' },
-        { status: 400 }
-      );
+    if (!slug) {
+      return NextResponse.json({ error: 'Missing slug' }, { status: 400 });
     }
 
     const db = getAdminDb();
@@ -30,8 +19,13 @@ export async function POST(request: NextRequest) {
     const companyId = slugSnap.data()!.companyId as string;
 
     const visitorUid = `vis_${randomUUID().replace(/-/g, '')}`;
+    const visitorName = `Visitor ${visitorUid.slice(-4).toUpperCase()}`;
     const now = Date.now();
-    const sessionRef = db.collection('companies').doc(companyId).collection('sessions').doc();
+    const sessionRef = db
+      .collection('companies')
+      .doc(companyId)
+      .collection('sessions')
+      .doc();
 
     await sessionRef.set({
       visitorName,
