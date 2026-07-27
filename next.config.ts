@@ -2,7 +2,7 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   // Prevent Turbopack from breaking firebase-admin on Vercel serverless.
-  serverExternalPackages: ['firebase-admin'],
+  serverExternalPackages: ['firebase-admin', 'jose', 'jwks-rsa'],
   async headers() {
     return [
       {
