@@ -27,9 +27,10 @@
     '#livedesk-btn:hover{filter:brightness(1.05)}' +
     '#livedesk-backdrop{position:fixed;inset:0;z-index:2147483001;background:rgba(15,23,42,.45);display:none;align-items:flex-end;justify-content:flex-end;padding:16px}' +
     '#livedesk-backdrop.open{display:flex}' +
-    '#livedesk-panel{width:min(400px,100%);height:min(640px,calc(100vh - 32px));background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 25px 60px rgba(15,23,42,.35);position:relative}' +
+    '#livedesk-panel{width:min(420px,100%);height:min(720px,calc(100vh - 32px));background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 25px 60px rgba(15,23,42,.35);position:relative;isolation:isolate}' +
+    '@media (min-width:900px){#livedesk-panel{width:min(980px,calc(100vw - 32px));height:min(720px,calc(100vh - 32px))}}' +
     '#livedesk-close{position:absolute;top:10px;right:10px;z-index:2;border:0;background:rgba(15,23,42,.08);width:32px;height:32px;border-radius:999px;cursor:pointer;font-size:18px;line-height:1}' +
-    '#livedesk-frame{width:100%;height:100%;border:0;display:block}';
+    '#livedesk-frame{width:100%;height:100%;border:0;display:block;position:relative;z-index:1}';
   document.head.appendChild(style);
 
   var root = document.createElement('div');

@@ -8,6 +8,7 @@ import {
   acceptSession,
   endSession,
   setMemberOnline,
+  subscribeMember,
   subscribeWaitingSessions,
 } from '@/lib/companies';
 import type { CallSession } from '@/lib/types';
@@ -20,35 +21,36 @@ export default function ConsolePage() {
   const [error, setError] = useState('');
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
-  const goOffline = useCallback(async () => {
+  useEffect(() => {
     if (!company || !user) return;
-    try {
-      await setMemberOnline(company.id, user.uid, false);
-      setOnline(false);
-    } catch {
-      // best effort on unload
-    }
+    return subscribeMember(company.id, user.uid, (member) => {
+      if (member) setOnline(member.online);
+    });
   }, [company, user]);
 
   useEffect(() => {
     if (!company) return;
-    return subscribeWaitingSessions(company.id, setQueue);
+    return subscribeWaitingSessions(
+      company.id,
+      setQueue,
+      (message) => setError(message)
+    );
   }, [company]);
 
   useEffect(() => {
-    if (!online) return;
-    const onUnload = () => {
-      void goOffline();
-    };
-    window.addEventListener('beforeunload', onUnload);
-    return () => window.removeEventListener('beforeunload', onUnload);
-  }, [online, goOffline]);
+    if (!online || !company || !user) return;
 
-  useEffect(() => {
-    return () => {
-      void goOffline();
+    const goOffline = () => {
+      void setMemberOnline(company.id, user.uid, false);
     };
-  }, [goOffline]);
+
+    window.addEventListener('pagehide', goOffline);
+    window.addEventListener('beforeunload', goOffline);
+    return () => {
+      window.removeEventListener('pagehide', goOffline);
+      window.removeEventListener('beforeunload', goOffline);
+    };
+  }, [online, company, user]);
 
   async function toggleOnline() {
     if (!company || !user) return;
@@ -82,11 +84,11 @@ export default function ConsolePage() {
     }
   }
 
-  async function onEndCall() {
+  const onEndCall = useCallback(async () => {
     if (!company || !active) return;
     await endSession(company.id, active.id);
     setActive(null);
-  }
+  }, [company, active]);
 
   if (!company || !user || !profile) return null;
 
@@ -121,7 +123,7 @@ export default function ConsolePage() {
       )}
 
       {active?.roomName ? (
-        <div className="h-[70vh] overflow-hidden rounded-3xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="h-[min(820px,calc(100vh-9rem))] overflow-hidden rounded-3xl border border-slate-200 bg-slate-950 p-2 shadow-sm">
           <VideoCall
             companyId={company.id}
             sessionId={active.id}
@@ -152,7 +154,9 @@ export default function ConsolePage() {
               <UserRound className="mb-3 text-slate-300" size={36} />
               <p className="font-medium text-slate-700">No visitors waiting</p>
               <p className="mt-1 text-sm text-slate-500">
-                New widget sessions will appear here in order.
+                Ask a visitor to open the widget, enter their name, and tap
+                Start video call — opening the bubble alone does not join the
+                queue.
               </p>
             </div>
           ) : (

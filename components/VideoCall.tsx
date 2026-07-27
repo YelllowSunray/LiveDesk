@@ -7,8 +7,9 @@ import {
   VideoConference,
   useRoomContext,
 } from '@livekit/components-react';
-import { PhoneOff } from 'lucide-react';
+import { Menu, PhoneOff, X } from 'lucide-react';
 import { getClientAuth } from '@/lib/firebase/client';
+import { getWidgetAuth } from '@/lib/firebase/widget-client';
 import { PomodoroTimer } from '@/components/PomodoroTimer';
 import { RadioPlayer } from '@/components/RadioPlayer';
 
@@ -21,14 +22,88 @@ interface VideoCallProps {
   brandColor?: string;
   title?: string;
   onEnded?: () => void;
+  /** Visitors must use the isolated widget Firebase app. */
+  auth?: 'default' | 'widget';
 }
 
-function CallTools() {
+function CallRoomContent({
+  title,
+  participantName,
+  brandColor,
+  onEnded,
+}: {
+  title: string;
+  participantName: string;
+  brandColor: string;
+  onEnded?: () => void;
+}) {
   const room = useRoomContext();
+  const [showTools, setShowTools] = useState(false);
+
   return (
-    <div className="flex h-full w-full flex-col gap-4 overflow-y-auto p-4">
-      <PomodoroTimer room={room} />
-      <RadioPlayer room={room} />
+    <div className="flex h-full min-h-0 w-full flex-col bg-slate-950">
+      <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-3 py-2.5 sm:px-4">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-white">{title}</p>
+          <p className="truncate text-xs text-slate-400">{participantName}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowTools((v) => !v)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/15 lg:hidden"
+            aria-expanded={showTools}
+            aria-label={showTools ? 'Hide tools' : 'Show timer and radio'}
+          >
+            {showTools ? <X size={16} /> : <Menu size={16} />}
+            Tools
+          </button>
+          {onEnded && (
+            <button
+              type="button"
+              onClick={onEnded}
+              className="inline-flex items-center gap-2 rounded-lg bg-red-500/20 px-3 py-1.5 text-sm font-medium text-red-300 hover:bg-red-500/30"
+            >
+              <PhoneOff size={16} />
+              End
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+        {/* Left sidebar — Pomodoro + Radio (same as previous StudyRoom) */}
+        <aside
+          className={`${
+            showTools ? 'flex' : 'hidden'
+          } absolute inset-0 z-20 flex-col overflow-y-auto border-white/10 bg-slate-900 lg:static lg:z-0 lg:flex lg:w-80 lg:shrink-0 lg:border-r`}
+        >
+          <div className="space-y-4 p-4">
+            <div className="flex items-center justify-between lg:hidden">
+              <p className="text-sm font-semibold text-white">Call tools</p>
+              <button
+                type="button"
+                onClick={() => setShowTools(false)}
+                className="rounded-lg bg-white/10 p-2 text-slate-200"
+                aria-label="Close tools"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <PomodoroTimer room={room} />
+            <RadioPlayer room={room} />
+          </div>
+        </aside>
+
+        {/* Video stage */}
+        <div
+          className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-slate-950"
+          style={{ ['--lk-accent-bg' as string]: brandColor }}
+        >
+          <VideoConference />
+          <RoomAudioRenderer />
+        </div>
+      </div>
     </div>
   );
 }
@@ -42,6 +117,7 @@ export function VideoCall({
   brandColor = '#0f766e',
   title = 'LiveDesk Call',
   onEnded,
+  auth = 'default',
 }: VideoCallProps) {
   const [token, setToken] = useState('');
   const [wsUrl, setWsUrl] = useState('');
@@ -53,7 +129,8 @@ export function VideoCall({
     async function connect() {
       setError('');
       try {
-        const user = getClientAuth().currentUser;
+        const authClient = auth === 'widget' ? getWidgetAuth() : getClientAuth();
+        const user = authClient.currentUser;
         if (!user) {
           throw new Error('Not authenticated');
         }
@@ -91,7 +168,7 @@ export function VideoCall({
     return () => {
       cancelled = true;
     };
-  }, [companyId, sessionId, roomName, participantName, role]);
+  }, [companyId, sessionId, roomName, participantName, role, auth]);
 
   if (error) {
     return (
@@ -119,23 +196,7 @@ export function VideoCall({
   }
 
   return (
-    <div className="flex h-full min-h-[320px] flex-col overflow-hidden rounded-2xl bg-slate-950">
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-        <div>
-          <p className="text-sm font-semibold text-white">{title}</p>
-          <p className="text-xs text-slate-400">{participantName}</p>
-        </div>
-        {onEnded && (
-          <button
-            type="button"
-            onClick={onEnded}
-            className="inline-flex items-center gap-2 rounded-lg bg-red-500/20 px-3 py-1.5 text-sm font-medium text-red-300 hover:bg-red-500/30"
-          >
-            <PhoneOff size={16} />
-            End
-          </button>
-        )}
-      </div>
+    <div className="h-full min-h-[320px] overflow-hidden rounded-2xl">
       <LiveKitRoom
         video
         audio
@@ -143,17 +204,15 @@ export function VideoCall({
         serverUrl={wsUrl}
         connectOptions={{ autoSubscribe: true }}
         onError={(err) => setError(err.message)}
-        className="flex min-h-0 flex-1 overflow-hidden"
+        className="h-full w-full"
+        data-lk-theme="default"
       >
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
-          <aside className="max-h-[42%] shrink-0 overflow-y-auto border-b border-white/10 bg-slate-900/80 md:max-h-none md:w-80 md:border-b-0 md:border-r">
-            <CallTools />
-          </aside>
-          <div className="relative min-h-0 min-w-0 flex-1">
-            <VideoConference />
-            <RoomAudioRenderer />
-          </div>
-        </div>
+        <CallRoomContent
+          title={title}
+          participantName={participantName}
+          brandColor={brandColor}
+          onEnded={onEnded}
+        />
       </LiveKitRoom>
     </div>
   );

@@ -3,7 +3,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { VideoCall } from '@/components/VideoCall';
-import { useAuth } from '@/lib/firebase/auth-context';
 import {
   createVisitorSession,
   endSession,
@@ -12,15 +11,19 @@ import {
   subscribeMembersOnline,
   subscribeSession,
 } from '@/lib/companies';
+import {
+  ensureWidgetAnonymousUser,
+  getWidgetDb,
+} from '@/lib/firebase/widget-client';
 import type { CallSession, Company } from '@/lib/types';
 
 export default function WidgetPage() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
-  const { ensureAnonymous } = useAuth();
 
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authReady, setAuthReady] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [visitorName, setVisitorName] = useState('');
   const [session, setSession] = useState<CallSession | null>(null);
@@ -31,10 +34,34 @@ export default function WidgetPage() {
 
   useEffect(() => {
     let cancelled = false;
+    async function boot() {
+      try {
+        await ensureWidgetAnonymousUser();
+        if (!cancelled) setAuthReady(true);
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : 'Could not start visitor session. Enable Anonymous Auth in Firebase.'
+          );
+          setAuthReady(true);
+        }
+      }
+    }
+    void boot();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
     async function load() {
       setLoading(true);
       try {
-        const c = await getCompanyBySlug(slug);
+        const c = await getCompanyBySlug(slug, getWidgetDb());
         if (cancelled) return;
         if (!c) {
           setNotFound(true);
@@ -54,15 +81,20 @@ export default function WidgetPage() {
   }, [slug]);
 
   useEffect(() => {
-    if (!company) return;
-    return subscribeMembersOnline(company.id, setOnlineAgents);
-  }, [company]);
+    if (!company || !authReady) return;
+    return subscribeMembersOnline(company.id, setOnlineAgents, getWidgetDb());
+  }, [company, authReady]);
 
   useEffect(() => {
     if (!company || !session) return;
-    return subscribeSession(company.id, session.id, (next) => {
-      if (next) setSession(next);
-    });
+    return subscribeSession(
+      company.id,
+      session.id,
+      (next) => {
+        if (next) setSession(next);
+      },
+      getWidgetDb()
+    );
   }, [company, session?.id]);
 
   useEffect(() => {
@@ -72,7 +104,8 @@ export default function WidgetPage() {
       const pos = await getQueuePosition(
         company!.id,
         session!.id,
-        session!.createdAt
+        session!.createdAt,
+        getWidgetDb()
       );
       if (!cancelled) setPosition(pos);
     }
@@ -94,18 +127,24 @@ export default function WidgetPage() {
   async function onJoin(e: FormEvent) {
     e.preventDefault();
     if (!company) return;
+    const name = visitorName.trim();
+    if (!name) {
+      setError('Please enter your name');
+      return;
+    }
     setJoining(true);
     setError('');
     try {
-      const user = await ensureAnonymous();
+      const user = await ensureWidgetAnonymousUser();
       const sessionId = await createVisitorSession(
         company.id,
         user.uid,
-        visitorName
+        name,
+        getWidgetDb()
       );
       setSession({
         id: sessionId,
-        visitorName: visitorName.trim(),
+        visitorName: name,
         visitorUid: user.uid,
         status: 'waiting',
         roomName: null,
@@ -123,7 +162,12 @@ export default function WidgetPage() {
 
   async function leaveQueue() {
     if (!company || !session) return;
-    await endSession(company.id, session.id);
+    try {
+      await endSession(company.id, session.id, getWidgetDb());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not leave queue');
+      return;
+    }
     setSession(null);
   }
 
@@ -165,6 +209,7 @@ export default function WidgetPage() {
             brandColor={brand}
             title={company.name}
             onEnded={() => void leaveQueue()}
+            auth="widget"
           />
         </div>
       </Shell>
@@ -178,7 +223,10 @@ export default function WidgetPage() {
           <p className="text-lg font-semibold text-slate-900">Call ended</p>
           <button
             type="button"
-            onClick={() => setSession(null)}
+            onClick={() => {
+              setSession(null);
+              setVisitorName('');
+            }}
             className="mt-4 rounded-xl px-4 py-2 text-sm font-semibold text-white"
             style={{ backgroundColor: brand }}
           >
@@ -211,12 +259,13 @@ export default function WidgetPage() {
             Hang tight, {session.visitorName}. A {company.name} representative
             will connect you on video soon.
           </p>
+          <p className="mt-2 text-xs text-slate-500">{statusLabel}</p>
           <button
             type="button"
             onClick={() => void leaveQueue()}
             className="mt-6 text-sm font-medium text-slate-500 underline"
           >
-            Leave queue
+            Leave queue & change name
           </button>
         </div>
       </Shell>
@@ -225,7 +274,7 @@ export default function WidgetPage() {
 
   return (
     <Shell>
-      <div className="flex h-full flex-col justify-between p-6">
+      <div className="flex h-full flex-col justify-between gap-6 overflow-y-auto p-6">
         <div>
           <div className="mb-4 flex items-center gap-3">
             {company.logoUrl ? (
@@ -259,11 +308,15 @@ export default function WidgetPage() {
           <label className="block space-y-1.5">
             <span className="text-sm font-medium text-slate-700">Your name</span>
             <input
+              type="text"
+              name="visitorName"
+              autoComplete="name"
+              autoFocus
               value={visitorName}
               onChange={(e) => setVisitorName(e.target.value)}
               required
               placeholder="Alex"
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:ring-2"
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:ring-2"
               style={{ ['--tw-ring-color' as string]: brand }}
             />
           </label>
@@ -274,7 +327,7 @@ export default function WidgetPage() {
           )}
           <button
             type="submit"
-            disabled={joining}
+            disabled={joining || !authReady}
             className="w-full rounded-xl px-4 py-3 font-semibold text-white disabled:opacity-60"
             style={{ backgroundColor: brand }}
           >
