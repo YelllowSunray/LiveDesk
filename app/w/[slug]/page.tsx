@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { VideoCall } from '@/components/VideoCall';
 import {
@@ -23,7 +23,6 @@ export default function WidgetPage() {
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [visitorName, setVisitorName] = useState('');
   const [session, setSession] = useState<CallSession | null>(null);
   const [position, setPosition] = useState(1);
   const [onlineAgents, setOnlineAgents] = useState(0);
@@ -98,21 +97,15 @@ export default function WidgetPage() {
     return 'No one is online — leave your place in line';
   }, [onlineAgents]);
 
-  async function onJoin(e: FormEvent) {
-    e.preventDefault();
-    if (!company || !slug) return;
-    const name = visitorName.trim();
-    if (!name) {
-      setError('Please enter your name');
-      return;
-    }
+  async function onJoin() {
+    if (!company || !slug || joining) return;
     setJoining(true);
     setError('');
     try {
       const res = await fetch('/api/visitor/join', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug, visitorName: name }),
+        body: JSON.stringify({ slug }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -190,10 +183,7 @@ export default function WidgetPage() {
           <p className="text-lg font-semibold text-slate-900">Call ended</p>
           <button
             type="button"
-            onClick={() => {
-              setSession(null);
-              setVisitorName('');
-            }}
+            onClick={() => setSession(null)}
             className="mt-4 rounded-xl px-4 py-2 text-sm font-semibold text-white"
             style={{ backgroundColor: brand }}
           >
@@ -223,8 +213,8 @@ export default function WidgetPage() {
             #{position}
           </p>
           <p className="mt-3 max-w-xs text-sm text-slate-600">
-            Hang tight, {session.visitorName}. A {company.name} representative
-            will connect you on video soon.
+            Hang tight. A {company.name} representative will connect you on
+            video soon.
           </p>
           <p className="mt-2 text-xs text-slate-500">{statusLabel}</p>
           <button
@@ -232,7 +222,7 @@ export default function WidgetPage() {
             onClick={() => void leaveQueue()}
             className="mt-6 text-sm font-medium text-slate-500 underline"
           >
-            Leave queue & change name
+            Leave queue
           </button>
         </div>
       </Shell>
@@ -271,36 +261,22 @@ export default function WidgetPage() {
             Start a live video conversation with our team — no chat bots.
           </p>
         </div>
-        <form onSubmit={onJoin} className="space-y-3">
-          <label className="block space-y-1.5">
-            <span className="text-sm font-medium text-slate-700">Your name</span>
-            <input
-              type="text"
-              name="visitorName"
-              autoComplete="name"
-              autoFocus
-              value={visitorName}
-              onChange={(e) => setVisitorName(e.target.value)}
-              required
-              placeholder="Alex"
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:ring-2"
-              style={{ ['--tw-ring-color' as string]: brand }}
-            />
-          </label>
+        <div className="space-y-3">
           {error && (
             <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
               {error}
             </p>
           )}
           <button
-            type="submit"
+            type="button"
+            onClick={() => void onJoin()}
             disabled={joining}
             className="w-full rounded-xl px-4 py-3 font-semibold text-white disabled:opacity-60"
             style={{ backgroundColor: brand }}
           >
             {joining ? 'Joining…' : 'Start video call'}
           </button>
-        </form>
+        </div>
       </div>
     </Shell>
   );
