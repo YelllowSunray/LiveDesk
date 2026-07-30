@@ -5,6 +5,7 @@ import { Check, Copy } from 'lucide-react';
 import { useAuth } from '@/lib/firebase/auth-context';
 import { updateCompanySettings } from '@/lib/companies';
 import { sanitizeNtfyTopic } from '@/lib/notify';
+import { sanitizeE164Phone } from '@/lib/phone';
 
 export default function DashboardPage() {
   const { company, refreshCompany } = useAuth();
@@ -15,6 +16,7 @@ export default function DashboardPage() {
     company?.welcomeMessage ?? ''
   );
   const [ntfyTopic, setNtfyTopic] = useState(company?.ntfyTopic ?? '');
+  const [alertPhone, setAlertPhone] = useState(company?.alertPhone ?? '');
 
   useEffect(() => {
     if (!company) return;
@@ -23,11 +25,13 @@ export default function DashboardPage() {
     setLogoUrl(company.logoUrl);
     setWelcomeMessage(company.welcomeMessage);
     setNtfyTopic(company.ntfyTopic || '');
+    setAlertPhone(company.alertPhone || '');
   }, [company]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [copied, setCopied] = useState(false);
   const [testingNotify, setTestingNotify] = useState(false);
+  const [testingCall, setTestingCall] = useState(false);
 
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ||
@@ -58,12 +62,19 @@ export default function DashboardPage() {
           'ntfy topic must be 3–64 characters: letters, numbers, _ or - only'
         );
       }
+      const phone = alertPhone.trim();
+      if (phone && !sanitizeE164Phone(phone)) {
+        throw new Error(
+          'Phone must be E.164 with country code, e.g. +31612345678'
+        );
+      }
       await updateCompanySettings(companyId, {
         name: name.trim(),
         brandColor,
         logoUrl: logoUrl.trim(),
         welcomeMessage: welcomeMessage.trim(),
         ntfyTopic: topic,
+        alertPhone: phone ? sanitizeE164Phone(phone) : '',
       });
       await refreshCompany();
       setMessage('Settings saved');
@@ -98,6 +109,9 @@ export default function DashboardPage() {
         logoUrl: logoUrl.trim(),
         welcomeMessage: welcomeMessage.trim(),
         ntfyTopic: topic,
+        alertPhone: alertPhone.trim()
+          ? sanitizeE164Phone(alertPhone.trim()) || alertPhone.trim()
+          : '',
       });
       await refreshCompany();
       setNtfyTopic(topic);
@@ -116,6 +130,45 @@ export default function DashboardPage() {
       setMessage(err instanceof Error ? err.message : 'Test failed');
     } finally {
       setTestingNotify(false);
+    }
+  }
+
+  async function sendTestCall() {
+    const phone = sanitizeE164Phone(alertPhone);
+    if (!phone) {
+      setMessage(
+        'Enter a valid phone with country code, e.g. +31612345678'
+      );
+      return;
+    }
+    setTestingCall(true);
+    setMessage('');
+    try {
+      await updateCompanySettings(companyId, {
+        name: name.trim(),
+        brandColor,
+        logoUrl: logoUrl.trim(),
+        welcomeMessage: welcomeMessage.trim(),
+        ntfyTopic: ntfyTopic.trim(),
+        alertPhone: phone,
+      });
+      await refreshCompany();
+      setAlertPhone(phone);
+
+      const res = await fetch('/api/notify/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: 'phone', phone }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Test call failed');
+      setMessage(
+        'Phone saved + test call placed. Answer to hear the LiveDesk message.'
+      );
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Test call failed');
+    } finally {
+      setTestingCall(false);
     }
   }
 
@@ -256,6 +309,51 @@ export default function DashboardPage() {
               className="rounded-xl border border-teal-700/30 bg-white px-4 py-2 text-sm font-semibold text-teal-900 hover:bg-teal-50 disabled:opacity-50"
             >
               {testingNotify ? 'Sending…' : 'Send test notification'}
+            </button>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 space-y-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">
+                Phone call alerts (Vonage)
+              </p>
+              <p className="mt-1 text-xs text-slate-600">
+                Same moment as ntfy: when someone taps Start video call, your
+                phone rings and says there is a SamirDev customer waiting.
+                Needs Vonage Application ID + private key + from-number on
+                Vercel (not just the API key).
+              </p>
+              {company.alertPhone ? (
+                <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-900">
+                  Calls active to {company.alertPhone}
+                </p>
+              ) : (
+                <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
+                  No phone saved yet — you will only get ntfy (if configured).
+                </p>
+              )}
+            </div>
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-slate-700">
+                Your phone (E.164)
+              </span>
+              <input
+                value={alertPhone}
+                onChange={(e) => setAlertPhone(e.target.value)}
+                placeholder="+31612345678"
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 font-mono text-sm outline-none ring-teal-600/30 focus:ring-2"
+              />
+              <span className="text-xs text-slate-500">
+                Include country code. Example NL: +31612345678
+              </span>
+            </label>
+            <button
+              type="button"
+              onClick={() => void sendTestCall()}
+              disabled={testingCall || !alertPhone.trim()}
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-50"
+            >
+              {testingCall ? 'Calling…' : 'Save + place test call'}
             </button>
           </div>
 

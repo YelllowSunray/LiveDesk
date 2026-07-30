@@ -38,6 +38,7 @@ export async function getCompanyBySlug(
     welcomeMessage:
       (data.welcomeMessage as string) || 'Talk to our team on video',
     ntfyTopic: (data.ntfyTopic as string) || '',
+    alertPhone: (data.alertPhone as string) || '',
     liveFeedActive: Boolean(data.liveFeedActive),
     createdAt: (data.createdAt as number) || Date.now(),
     ownerId: data.ownerId as string,
@@ -49,7 +50,12 @@ export async function updateCompanySettings(
   updates: Partial<
     Pick<
       Company,
-      'name' | 'brandColor' | 'logoUrl' | 'welcomeMessage' | 'ntfyTopic'
+      | 'name'
+      | 'brandColor'
+      | 'logoUrl'
+      | 'welcomeMessage'
+      | 'ntfyTopic'
+      | 'alertPhone'
     >
   >
 ): Promise<void> {
@@ -87,6 +93,7 @@ export function subscribeCompany(
         welcomeMessage:
           (data.welcomeMessage as string) || 'Talk to our team on video',
         ntfyTopic: (data.ntfyTopic as string) || '',
+        alertPhone: (data.alertPhone as string) || '',
         liveFeedActive: Boolean(data.liveFeedActive),
         createdAt: (data.createdAt as number) || Date.now(),
         ownerId: data.ownerId as string,

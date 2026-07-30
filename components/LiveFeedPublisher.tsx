@@ -3,46 +3,117 @@
 import { useEffect, useState } from 'react';
 import {
   LiveKitRoom,
+  useConnectionState,
   useRoomContext,
   VideoTrack,
   useTracks,
 } from '@livekit/components-react';
 import {
+  ConnectionState,
   LocalVideoTrack,
+  RoomEvent,
   Track,
   createLocalVideoTrack,
 } from 'livekit-client';
 import { getClientAuth } from '@/lib/firebase/client';
 
+/**
+ * Publish a *clone* of the shared camera into the preview room.
+ * Never publish the shared LocalVideoTrack itself — LiveKit unpublish/cleanup
+ * was leaving the agent joined with 0 tracks (viewers see black).
+ */
 function PublishSharedCamera({ track }: { track: LocalVideoTrack }) {
   const room = useRoomContext();
+  const connectionState = useConnectionState();
 
   useEffect(() => {
+    if (connectionState !== ConnectionState.Connected) return;
+
     let cancelled = false;
-    async function publish() {
+    let published: LocalVideoTrack | null = null;
+
+    async function ensurePublished() {
+      if (cancelled) return;
       try {
-        // Avoid double-publish if already present.
+        if (track.mediaStreamTrack.readyState === 'ended') {
+          console.error('preview camera track ended');
+          return;
+        }
+
         const existing = room.localParticipant
           .getTrackPublications()
           .find((p) => p.source === Track.Source.Camera);
-        if (existing?.track) return;
-        await room.localParticipant.publishTrack(track, {
+        if (existing?.track && existing.track.mediaStreamTrack.readyState === 'live') {
+          return;
+        }
+
+        // Drop a stale empty camera publication if present.
+        if (existing?.track && existing.track instanceof LocalVideoTrack) {
+          try {
+            await room.localParticipant.unpublishTrack(existing.track, true);
+          } catch {
+            // ignore
+          }
+        }
+
+        if (published) {
+          try {
+            published.stop();
+          } catch {
+            // ignore
+          }
+          published = null;
+        }
+
+        const clone = new LocalVideoTrack(track.mediaStreamTrack.clone());
+        published = clone;
+        await room.localParticipant.publishTrack(clone, {
           source: Track.Source.Camera,
         });
       } catch (err) {
         if (!cancelled) console.error('preview publish failed', err);
       }
     }
-    void publish();
+
+    void ensurePublished();
+
+    const onReconnected = () => {
+      void ensurePublished();
+    };
+    const onLocalUnpublished = () => {
+      // Unexpected unpublish (network blip) — try again shortly.
+      window.setTimeout(() => {
+        void ensurePublished();
+      }, 500);
+    };
+
+    room.on(RoomEvent.Reconnected, onReconnected);
+    room.on(RoomEvent.LocalTrackUnpublished, onLocalUnpublished);
+
+    const watchdog = window.setInterval(() => {
+      const cam = room.localParticipant
+        .getTrackPublications()
+        .find((p) => p.source === Track.Source.Camera);
+      if (!cam?.track || cam.track.mediaStreamTrack.readyState !== 'live') {
+        void ensurePublished();
+      }
+    }, 5000);
+
     return () => {
       cancelled = true;
-      try {
-        room.localParticipant.unpublishTrack(track, false);
-      } catch {
-        // room may already be disconnected
+      window.clearInterval(watchdog);
+      room.off(RoomEvent.Reconnected, onReconnected);
+      room.off(RoomEvent.LocalTrackUnpublished, onLocalUnpublished);
+      if (published) {
+        try {
+          room.localParticipant.unpublishTrack(published, true);
+        } catch {
+          published.stop();
+        }
+        published = null;
       }
     };
-  }, [room, track]);
+  }, [room, track, connectionState]);
 
   return null;
 }

@@ -67,6 +67,7 @@ async function loadCompany(companyId: string): Promise<Company | null> {
     welcomeMessage:
       (data.welcomeMessage as string) || 'Talk to our team on video',
     ntfyTopic: (data.ntfyTopic as string) || '',
+    alertPhone: (data.alertPhone as string) || '',
     liveFeedActive: Boolean(data.liveFeedActive),
     createdAt: (data.createdAt as number) || Date.now(),
     ownerId: data.ownerId as string,
@@ -163,6 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logoUrl: '',
         welcomeMessage: 'Talk to our team on video',
         ntfyTopic: '',
+        alertPhone: '',
         liveFeedActive: false,
         createdAt: now,
         ownerId: cred.user.uid,

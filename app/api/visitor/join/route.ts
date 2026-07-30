@@ -24,6 +24,7 @@ export async function POST(request: NextRequest) {
     const companyData = companySnap.data() || {};
     const companyName = (companyData.name as string) || 'LiveDesk';
     const ntfyTopic = (companyData.ntfyTopic as string) || '';
+    const alertPhone = (companyData.alertPhone as string) || '';
 
     const visitorUid = `vis_${randomUUID().replace(/-/g, '')}`;
     const visitorName = `Visitor ${visitorUid.slice(-4).toUpperCase()}`;
@@ -50,17 +51,27 @@ export async function POST(request: NextRequest) {
       companyId,
     });
 
+    const appUrl = (
+      process.env.NEXT_PUBLIC_APP_URL || 'https://live-desk-taupe.vercel.app'
+    ).replace(/\/$/, '');
+
+    // Must await on Vercel — fire-and-forget is killed when the response returns.
     if (ntfyTopic) {
       const { notifyVisitorWaiting } = await import('@/lib/notify');
-      const appUrl = (
-        process.env.NEXT_PUBLIC_APP_URL || 'https://live-desk-taupe.vercel.app'
-      ).replace(/\/$/, '');
-      // Must await on Vercel — fire-and-forget is killed when the response returns.
       await notifyVisitorWaiting({
         ntfyTopic,
         companyName,
         visitorName,
         consoleUrl: `${appUrl}/dashboard/console`,
+      });
+    }
+
+    if (alertPhone) {
+      const { callAgentAboutVisitor } = await import('@/lib/phone-call');
+      await callAgentAboutVisitor({
+        toPhone: alertPhone,
+        companyName,
+        visitorName,
       });
     }
 
