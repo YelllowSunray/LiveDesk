@@ -88,7 +88,7 @@ async function callWithVonage(input: {
   if (!to) return { ok: false, error: 'Invalid phone number' };
   if (!from) return { ok: false, error: 'Invalid Vonage from number' };
 
-  const text = `There is a ${input.companyName} customer waiting to call. Open your Live Desk agent console to accept.`;
+  const text = `There is a SamirDev customer waiting to call. Again, there is a SamirDev customer waiting to call`;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
