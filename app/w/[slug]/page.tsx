@@ -143,6 +143,23 @@ export default function WidgetPage() {
       }
       await signInWidgetWithCustomToken(data.customToken);
       setSession(data.session);
+
+      // Tell the host site (e.g. samirdev.com) so it can fire Ads conversions.
+      // Same moment as ntfy / phone alert on the server.
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(
+            {
+              source: 'livedesk',
+              type: 'start-video-call',
+              slug,
+            },
+            '*'
+          );
+        }
+      } catch {
+        /* ignore cross-origin / sandbox issues */
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not join queue');
     } finally {
