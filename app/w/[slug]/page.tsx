@@ -12,6 +12,7 @@ import {
   subscribeSession,
 } from '@/lib/companies';
 import { LiveFeedViewer } from '@/components/LiveFeedViewer';
+import { WaitingQueue } from '@/components/WaitingQueue';
 import {
   getWidgetDb,
   signInWidgetWithCustomToken,
@@ -244,34 +245,14 @@ export default function WidgetPage() {
   if (session?.status === 'waiting') {
     return (
       <Shell>
-        <div className="flex h-full flex-col items-center justify-center p-6 text-center">
-          {company.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={company.logoUrl}
-              alt=""
-              className="mb-4 h-12 w-12 rounded-full object-cover"
-            />
-          ) : null}
-          <p className="text-lg font-semibold text-slate-900">
-            You&apos;re in line
-          </p>
-          <p className="mt-2 text-4xl font-bold" style={{ color: brand }}>
-            #{position}
-          </p>
-          <p className="mt-3 max-w-xs text-sm text-slate-600">
-            Hang tight. A {company.name} representative will connect you on
-            video soon.
-          </p>
-          <p className="mt-2 text-xs text-slate-500">{statusLabel}</p>
-          <button
-            type="button"
-            onClick={() => void leaveQueue()}
-            className="mt-6 text-sm font-medium text-slate-500 underline"
-          >
-            Leave queue
-          </button>
-        </div>
+        <WaitingQueue
+          companyName={company.name}
+          brandColor={brand}
+          logoUrl={company.logoUrl}
+          position={position}
+          statusLabel={statusLabel}
+          onLeave={() => void leaveQueue()}
+        />
       </Shell>
     );
   }
